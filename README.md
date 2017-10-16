@@ -5,4 +5,5 @@ Healthcare issuers provide index files with links to the provider and forumlary 
 
 ## Usage
 The program takes the url for the index file and the destination to download the files.  It will download the files to the destination entered in a folder marked 'providers' or 'drugs'
+
 `download-coverage-json [index-url] [file-destination]`
