@@ -15,7 +15,7 @@ type URLs struct {
 	Drugs     []string `json:"formulary_urls"`
 }
 
-func download(urls []string, client *http.Client) error {
+func download(client *http.Client, urls []string, dest string) error {
 	for _, url := range urls {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -26,12 +26,17 @@ func download(urls []string, client *http.Client) error {
 		if err != nil {
 			return err
 		}
-		out, err := os.Create(path.Base(req.URL.Path))
-		defer out.Close()
+		err = os.MkdirAll(dest, os.ModePerm)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Downloading %s\n", url)
+		out, err := os.Create(dest + path.Base(req.URL.Path))
+		defer out.Close()
+		if err != nil {
+			fmt.Println("error here")
+			return err
+		}
+		fmt.Printf("Downloading %s to %s\n", url, dest)
 		if _, err := io.Copy(out, resp.Body); err != nil {
 			return err
 		}
@@ -41,11 +46,12 @@ func download(urls []string, client *http.Client) error {
 
 func main() {
 	// get the url from args
-	if len(os.Args) != 2 {
-		fmt.Println("download-coverage-json [indexurl]")
+	if len(os.Args) != 3 {
+		fmt.Println("download-coverage-json [indexurl] [destination]")
 		os.Exit(1)
 	}
 	indexURL := os.Args[1]
+	dest := os.Args[2]
 	resp, err := http.Get(indexURL)
 	defer resp.Body.Close()
 	checkErr(err)
@@ -58,9 +64,9 @@ func main() {
 	}
 
 	client := &http.Client{}
-	err = download(urls.Providers, client)
+	err = download(client, urls.Providers, dest+"/providers/")
 	checkErr(err)
-	err = download(urls.Drugs, client)
+	err = download(client, urls.Drugs, dest+"/drugs/")
 	checkErr(err)
 }
 
