@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sync"
 )
 
 type URLs struct {
@@ -15,31 +16,25 @@ type URLs struct {
 	Drugs     []string `json:"formulary_urls"`
 }
 
-func download(client *http.Client, urls []string, dest string) error {
+func download(client *http.Client, wg *sync.WaitGroup, urls []string, dest string) error {
+	wg.Add(len(urls))
 	for _, url := range urls {
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := client.Do(req)
-		defer resp.Body.Close()
-		if err != nil {
-			return err
-		}
-		err = os.MkdirAll(dest, os.ModePerm)
-		if err != nil {
-			return err
-		}
-		out, err := os.Create(dest + path.Base(req.URL.Path))
-		defer out.Close()
-		if err != nil {
-			fmt.Println("error here")
-			return err
-		}
-		fmt.Printf("Downloading %s to %s\n", url, dest)
-		if _, err := io.Copy(out, resp.Body); err != nil {
-			return err
-		}
+		go func(u string) {
+			defer wg.Done()
+			req, err := http.NewRequest("GET", u, nil)
+			checkErr(err)
+			resp, err := client.Do(req)
+			checkErr(err)
+			defer resp.Body.Close()
+			err = os.MkdirAll(dest, os.ModePerm)
+			checkErr(err)
+			out, err := os.Create(dest + path.Base(req.URL.Path))
+			checkErr(err)
+			defer out.Close()
+			fmt.Printf("Downloading %s to %s\n", u, dest)
+			_, err = io.Copy(out, resp.Body)
+			checkErr(err)
+		}(url)
 	}
 	return nil
 }
@@ -64,10 +59,15 @@ func main() {
 	}
 
 	client := &http.Client{}
-	err = download(client, urls.Providers, dest+"/providers/")
+	var wg sync.WaitGroup
+	var other sync.WaitGroup
+	err = download(client, &wg, urls.Providers, dest+"/providers/")
+	wg.Wait()
 	checkErr(err)
-	err = download(client, urls.Drugs, dest+"/drugs/")
+	err = download(client, &other, urls.Drugs, dest+"/drugs/")
 	checkErr(err)
+	other.Wait()
+
 }
 
 func checkErr(err error) {
